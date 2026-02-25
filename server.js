@@ -1,11 +1,15 @@
 const express = require('express');
-const cors = require('cors');
 const http = require('http');
 const WebSocket = require('ws');
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-app.use(cors());
+const cors = require('cors');
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.options('*', cors());
 app.use(express.json({ limit: '50mb' })); // Aumentar limite para imagens
 app.use(express.static('public'));
 
