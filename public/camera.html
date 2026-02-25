@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Câmera Ao Vivo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        #cameraFeed {
+            width: 100%;
+            background: black;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .online {
+            background: #4caf50;
+        }
+        .offline {
+            background: #f44336;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .btn-start {
+            background: #4caf50;
+            color: white;
+        }
+        .btn-stop {
+            background: #f44336;
+            color: white;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #333;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📷 Câmera Ao Vivo</h1>
+        
+        <img id="cameraFeed" src="" style="display: none;">
+        <div id="noSignal" style="text-align: center; padding: 100px 20px; background: #333; border-radius: 10px;">
+            <p style="font-size: 18px;">📡 Aguardando sinal da câmera...</p>
+        </div>
+        
+        <div id="status" class="status offline">
+            Status: Desconectado
+        </div>
+        
+        <div class="controls">
+            <button id="btnStart" class="btn-start">▶️ Iniciar Câmera</button>
+            <button id="btnStop" class="btn-stop" disabled>⏹️ Parar Câmera</button>
+        </div>
+        
+        <div class="info" id="info">
+            <p>🔗 Dispositivo: <span id="deviceIdDisplay"></span></p>
+            <p>📊 Frames: <span id="frameCount">0</span></p>
+            <p>⏱️ Último frame: <span id="lastFrame">-</span></p>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const deviceId = urlParams.get('device') || 'todos';
+        document.getElementById('deviceIdDisplay').textContent = deviceId;
+        
+        let ws;
+        let frameCount = 0;
+        let lastFrameTime = null;
+        
+        function conectarWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/view/${deviceId}`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('✅ Conectado ao servidor WebSocket');
+                atualizarStatus('online', 'Conectado');
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'frame') {
+                    frameCount++;
+                    document.getElementById('frameCount').textContent = frameCount;
+                    
+                    const img = document.getElementById('cameraFeed');
+                    img.src = 'data:image/jpeg;base64,' + data.frame;
+                    img.style.display = 'block';
+                    
+                    document.getElementById('noSignal').style.display = 'none';
+                    
+                    lastFrameTime = new Date().toLocaleTimeString();
+                    document.getElementById('lastFrame').textContent = lastFrameTime;
+                    
+                } else if (data.type === 'stream_online') {
+                    atualizarStatus('online', 'Stream ativo');
+                } else if (data.type === 'stream_offline') {
+                    atualizarStatus('offline', 'Stream offline');
+                    document.getElementById('cameraFeed').style.display = 'none';
+                    document.getElementById('noSignal').style.display = 'block';
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('❌ Desconectado do servidor');
+                atualizarStatus('offline', 'Desconectado');
+                setTimeout(conectarWebSocket, 3000);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('Erro WebSocket:', error);
+            };
+        }
+        
+        function atualizarStatus(tipo, mensagem) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${tipo}`;
+            statusDiv.textContent = `Status: ${mensagem}`;
+        }
+        
+        document.getElementById('btnStart').addEventListener('click', () => {
+            fetch(`/api/camera/start/${deviceId}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('📷 Comando para iniciar enviado');
+                        document.getElementById('btnStart').disabled = true;
+                        document.getElementById('btnStop').disabled = false;
+                    }
+                });
+        });
+        
+        document.getElementById('btnStop').addEventListener('click', () => {
+            fetch(`/api/camera/stop/${deviceId}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('📷 Comando para parar enviado');
+                        document.getElementById('btnStart').disabled = false;
+                        document.getElementById('btnStop').disabled = true;
+                    }
+                });
+        });
+        
+        // Iniciar conexão
+        conectarWebSocket();
+        
+        // Atualizar status periodicamente
+        setInterval(() => {
+            fetch(`/api/camera/status/${deviceId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.streaming) {
+                        document.getElementById('btnStart').disabled = true;
+                        document.getElementById('btnStop').disabled = false;
+                    } else {
+                        document.getElementById('btnStart').disabled = false;
+                        document.getElementById('btnStop').disabled = true;
+                    }
+                });
+        }, 5000);
+    </script>
+</body>
+</html>
