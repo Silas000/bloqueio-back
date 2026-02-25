@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 const cors = require('cors');
 app.use(cors({
     origin: '*',
@@ -117,6 +118,8 @@ app.post('/api/registrar', (req, res) => {
     
     dispositivos.push(novoDispositivo);
     console.log('📱 Registrado:', deviceId);
+    console.log('📊 Total dispositivos:', dispositivos.length);  // ← ADICIONE ESTA LINHA
+    console.log('📋 Lista atual:', dispositivos.map(d => d.id)); // ← ADICIONE ESTA LINHA
     
     res.json({ success: true, deviceId });
 });
@@ -185,13 +188,19 @@ app.get('/api/camera/status/:deviceId', (req, res) => {
     });
 });
 
+
 app.get('/api/dispositivos', (req, res) => {
+    console.log('📋 GET /api/dispositivos - Requisição recebida'); // ← ADICIONE
+    console.log('📊 Total no banco:', dispositivos.length);        // ← ADICIONE
+    
     const agora = new Date();
     dispositivos.forEach(d => {
         const diff = (agora - new Date(d.ultimoContato)) / 1000;
         d.status = diff < 60 ? 'online' : 'offline';
         d.streaming = streamsAtivos.has(d.id);
     });
+    
+    console.log('📤 Enviando:', dispositivos.length, 'dispositivos'); // ← ADICIONE
     res.json(dispositivos);
 });
 
